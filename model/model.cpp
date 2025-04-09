@@ -145,17 +145,23 @@ FLOAT model::area(void)const{
 }
 
 point model::centroid(void)const {
-    point ret_point(0,0);
-    for(UINT32 i=0 ;i<elements_size;i++){
-        INT32 val =(vec[i].x*vec[(i+1)%elements_size].y-vec[(i+1)%elements_size].x*vec[i].y) ;
-        ret_point.x+=(vec[i].x+vec[(i+1)%elements_size].x)*val;
-        ret_point.y+=(vec[i].y+vec[(i+1)%elements_size].y)*val;
-    }
     FLOAT poly_area = area() ;
-    ret_point.x = round(fabs(static_cast<FLOAT>(ret_point.x)/(FLOAT(6)*poly_area))) ;
-    ret_point.y = round(fabs(static_cast<FLOAT>(ret_point.y)/(FLOAT(6)*poly_area))) ;
-    return ret_point ;
-}
+    if(poly_area>=1600){
+        point ret_point(0,0);
+        for(UINT32 i=0 ;i<elements_size;i++){
+            INT32 val =(vec[i].x*vec[(i+1)%elements_size].y-vec[(i+1)%elements_size].x*vec[i].y) ;
+            ret_point.x+=(vec[i].x+vec[(i+1)%elements_size].x)*val;
+            ret_point.y+=(vec[i].y+vec[(i+1)%elements_size].y)*val;
+        }
+        FLOAT poly_area = area() ;
+        ret_point.x = round(fabs(static_cast<FLOAT>(ret_point.x)/(FLOAT(6)*poly_area))) ;
+        ret_point.y = round(fabs(static_cast<FLOAT>(ret_point.y)/(FLOAT(6)*poly_area))) ;
+        return ret_point ;
+    }
+    else{
+        return centroid_average(); 
+     }
+    }
 point model::centroid_average(void)const{
     if(elements_size>0){
         point ret_point(0,0);
