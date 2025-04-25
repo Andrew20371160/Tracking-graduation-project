@@ -1,27 +1,11 @@
-#include "model.h"
+#include "../include/model.h"
 #define ROWS 720
 
 #define COLS 1280
 using namespace std;
-    //threshold for differenece between 2 angles,2 slopes ....etc
-    const FLOAT threshold =0.5;
-    const FLOAT length_threshold = 10; 
-    const FLOAT zero_threshold = 0.001; 
-    //threshold for small forces
-    //used in insertion
-    const FLOAT force_threshold = 1;
 
-    //threshold for error in pixels count
-    const INT32 limit = 300;
 
-    //forces vector size
-    const INT32 max_forces_size = 60;
-    const INT32 max_model_size = 30;
 
-    enum regions
-    {
-        A=2,B=4,C=6,D=8
-    };
 
     void swap(point& p1, point& p2) {
         point temp = p1;
@@ -114,7 +98,10 @@ point& model:: operator[](UINT32 index){
     }
 }
 //reinit
-void model::reinit(const point&pt){
+void model::reinit(point pt){
+    if (pt.x == -1 && pt.y == -1) {
+        pt = current_centroid; 
+    }
     elements_size = 4 ; 
     vec[0] = point((pt.x-20),(pt.y-20));
     vec[1] = point((pt.x+20),(pt.y-20));
@@ -137,31 +124,28 @@ void model::reinit(const point&pt){
 }   
 
 FLOAT model::area(void)const{
-    FLOAT ret_area = 0  ;
-    for(UINT32 i=0; i<elements_size;i++){
-        ret_area +=(vec[i].x*vec[(i+1)%elements_size].y-vec[(i+1)%elements_size].x*vec[i].y);
+    if(elements_size>2){
+        FLOAT ret_area = 0  ;
+        for(UINT32 i=0; i<elements_size;i++){
+            ret_area +=(vec[i].x*vec[(i+1)%elements_size].y-vec[(i+1)%elements_size].x*vec[i].y);
+        }
+        return fabs(ret_area/2);
     }
-    return fabs(ret_area/2);
+    return 0 ; 
 }
 
 point model::centroid(void)const {
+    point ret_point(0,0);
+    for(UINT32 i=0 ;i<elements_size;i++){
+        INT32 val =(vec[i].x*vec[(i+1)%elements_size].y-vec[(i+1)%elements_size].x*vec[i].y) ;
+        ret_point.x+=(vec[i].x+vec[(i+1)%elements_size].x)*val;
+        ret_point.y+=(vec[i].y+vec[(i+1)%elements_size].y)*val;
+    }
     FLOAT poly_area = area() ;
-    if(poly_area>=1600){
-        point ret_point(0,0);
-        for(UINT32 i=0 ;i<elements_size;i++){
-            INT32 val =(vec[i].x*vec[(i+1)%elements_size].y-vec[(i+1)%elements_size].x*vec[i].y) ;
-            ret_point.x+=(vec[i].x+vec[(i+1)%elements_size].x)*val;
-            ret_point.y+=(vec[i].y+vec[(i+1)%elements_size].y)*val;
-        }
-        FLOAT poly_area = area() ;
-        ret_point.x = round(fabs(static_cast<FLOAT>(ret_point.x)/(FLOAT(6)*poly_area))) ;
-        ret_point.y = round(fabs(static_cast<FLOAT>(ret_point.y)/(FLOAT(6)*poly_area))) ;
-        return ret_point ;
-    }
-    else{
-        return centroid_average(); 
-     }
-    }
+    ret_point.x = round(fabs(static_cast<FLOAT>(ret_point.x)/(FLOAT(6)*poly_area))) ;
+    ret_point.y = round(fabs(static_cast<FLOAT>(ret_point.y)/(FLOAT(6)*poly_area))) ;
+    return ret_point ;
+}
 point model::centroid_average(void)const{
     if(elements_size>0){
         point ret_point(0,0);
@@ -180,8 +164,13 @@ BOOL model::forces(INT32* hist){
     if(hist){
         for(UINT32 i =0 ; i <elements_size;i++){
             FLOAT lambda = vec[i].length(vec[(i+1)%elements_size])*2 ;
-            force_vec[2*i] =static_cast<FLOAT>(hist[8*i+A+1]-hist[8*i+D])/lambda;
-            force_vec[2*i+1] =static_cast<FLOAT>(hist[8*i+B+1]-hist[8*i+C])/lambda;
+            force_vec[2 * i] = static_cast<FLOAT>(hist[8 * i + A + 1] - hist[8 * i + D + 0]) / lambda;
+            if (((float)hist[8 * i + A + 1] / (float)(hist[8 * i + A + 1] + hist[8 * i + A + 0]) > 0.85)
+                || ((float)hist[8 * i + D + 0] / (float)(hist[8 * i + D + 0] + hist[8 * i + D + 1]) > 0.85)) force_vec[2 * i] *= 6;
+
+            force_vec[2 * i + 1] = static_cast<FLOAT>(hist[8 * i + B + 1] - hist[8 * i + C + 0]) / lambda;
+            if (((float)hist[8 * i + B + 1] / (float)(hist[8 * i + B + 1] + hist[8 * i + B + 0]) > 0.85)
+                || ((float)hist[8 * i + C + 0] / (float)(hist[8 * i + C + 0] + hist[8 * i + C + 1]) > 0.85)) force_vec[2 * i + 1] *= 6;
         }
         return 1;
     }
@@ -232,8 +221,8 @@ void model::insert_vertecies_at_position(INT32* hist){
             if((fabs(force_vec[i])<=force_threshold)&&
                (fabs(force_vec[i+1])<=force_threshold)){
                 //if a region intersecion with error is more than limit insert and skip added vertex
-                if((hist[8*i+A+1]>limit)||(hist[8*i+B+1]>limit)
-                 ||(hist[8*i+C]>limit)||(hist[8*i+D]>limit)){
+                if ((hist[8 * i + A + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + B + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) ||
+                    (hist[8 * i + C + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + D + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2))) {
                     insert(vec[i].mid_point(vec[(i+1)%elements_size]),(i+1));
                     i++;
                 }
@@ -296,9 +285,11 @@ void model::insert_vertecies_at_position(INT32* hist){
 
    //returns state of the mask
     INT32 model::get_state(INT32*hist){
-        //keep fixing intersections till there are no more 
-        while(fix_intersection());
-        if(area()>=1600&&elements_size>2){
+        
+        if(area()>=100){
+            
+            //get current centroid 
+            current_centroid = centroid();
             //calculate the forces using the histogram
             forces(hist) ;
             //check for deformation
@@ -313,8 +304,8 @@ void model::insert_vertecies_at_position(INT32* hist){
 
             //if error regions are bigger than limit then we need insert
             for(UINT32 i = 0 ; i<elements_size;i++){
-                if((hist[8*i+A+1]>limit)||(hist[8*i+B+1]>limit)||
-                   (hist[8*i+C+0]>limit)||(hist[8*i+D+0]>limit)){
+                if ((hist[8 * i + A + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + B + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) ||
+                    (hist[8 * i + C + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + D + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2))) {
                     return INSERT ;
                 }
             }
@@ -403,57 +394,82 @@ BOOL line_eq(const point& p1,const point&p2,FLOAT &a,FLOAT&b){
 void print_point(const point&p ){
     cout<<"\n("<<p.x<<","<<p.y<<") " ; 
 }
-BOOL model:: intersection_check(const point&p0,const point&p1, const point&p2 ,const point&p3,point&inter_p) const{
-    FLOAT a1=0,a2=0,b1=0,b2=0 ; 
-    BOOL not_perp1 = line_eq(p0,p1,a1,b1) ;
-    BOOL not_perp2 = line_eq(p2,p3,a2,b2) ;      
-    INT32 len1 = p0.length_squared(p1) ;
-    INT32 len2 = p2.length_squared(p3) ;  
-    if(!not_perp1&&!not_perp2){
+BOOL model::intersection_check(const point& p0, const point& p1, const point& p2, const point& p3, point& inter_p) const {
+    FLOAT a1 = 0, a2 = 0, b1 = 0, b2 = 0;
+    BOOL not_perp1 = line_eq(p0, p1, a1, b1);
+    BOOL not_perp2 = line_eq(p2, p3, a2, b2);
+    INT32 len1 = p0.length_squared(p1);
+    INT32 len2 = p2.length_squared(p3);
+    if (!not_perp1 && !not_perp2) {
         //if both are pendecular then no chance of intersection
-        return 0 ; 
+        return 0;
     }
-    if(not_perp1&&not_perp2){    
-        if(fabs(a1-a2)>zero_threshold){
+    if (not_perp1 && not_perp2) {
+        if (fabs(a1 - a2) > zero_threshold) {
             //if less then they intersect at infinity 
-            inter_p.x= round(static_cast<FLOAT>(b2-b1)/static_cast<FLOAT>(a1-a2)) ;    
-            inter_p.y = round(a1*static_cast<FLOAT>(inter_p.x)+b1) ;
+            inter_p.x = round(static_cast<FLOAT>(b2 - b1) / static_cast<FLOAT>(a1 - a2));
+            inter_p.y = round(a1 * static_cast<FLOAT>(inter_p.x) + b1);
         }
-        else{
-             return 0;
+        else {
+            return 0;
         }
     }
-    else if(not_perp2){
+    else if (not_perp2) {
         //if first is perpendecular 
-        inter_p.x = p0.x ; 
-        inter_p.y = round(a2*static_cast<FLOAT>(inter_p.x)+b2) ;    
+        inter_p.x = p0.x;
+        inter_p.y = round(a2 * static_cast<FLOAT>(inter_p.x) + b2);
     }
-    else if(not_perp1){
+    else if (not_perp1) {
         //if second is perpendecular 
-        inter_p.x = p2.x ; 
-        inter_p.y =round(a1*static_cast<FLOAT>(inter_p.x)+b1 );    
-    } 
-    //if inter_p within first line and within second line
-    if((inter_p.x>=0&&inter_p.x<=COLS-1 &&inter_p.y>=0&&inter_p.y<=ROWS-1&&inter_p.length_squared(p0)<len1&&inter_p.length_squared(p1)<len1)
-     &&(inter_p.length_squared(p2)<len2&&inter_p.length_squared(p3)<len2)){
-        return 1;
+        inter_p.x = p2.x;
+        inter_p.y = round(a1 * static_cast<FLOAT>(inter_p.x) + b1);
     }
-    return 0; 
-}   
-BOOL model::fix_intersection(void){
+    //if inter_p within first line and within second line
+    if (inter_p.x >= 0 && inter_p.x <= COLS - 1 && inter_p.y >= 0 && inter_p.y <= ROWS - 1){
+        point p1_sub_p0 = p1 - p0; 
+        point p3_sub_p2 = p3 - p2;
+        float t1 = static_cast<float>((inter_p - p0).dot(p1_sub_p0)) / static_cast<float>(p1_sub_p0.dot(p1_sub_p0));
+        float t2 = static_cast<float>((inter_p - p2).dot(p3_sub_p2)) / static_cast<float>(p3_sub_p2.dot(p3_sub_p2));
+        if (t1 >= 0 && t1 <= 1 && t2 >= 0 && t2 <= 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+BOOL model::fix_intersection(void) {
     BOOL is_fixed = 0;
-    for(UINT32 i = 0 ; i <elements_size -1; i++){
-        for(UINT32 j=  i+1 ;j<elements_size;j++){
-            point inter_p ;
-            if(intersection_check(vec[i],vec[(i+1)%elements_size],vec[j],vec[(j+1)%elements_size],inter_p)){
-                remove(i%elements_size);     
-                vec[i] = inter_p;
-                is_fixed =1 ; 
+    const UINT32 n = elements_size;    
+    for (UINT32 i = 0; i < n; ++i) {
+        UINT32 i_next = (i + 1) % n;
+        for (UINT32 j = i + 1; j < n; ++j) {
+            UINT32 j_next = (j + 1) % n;            
+            if (j == i || j == i_next || i == j_next) {
+                continue;  // adjacent edges: no self intersection check needed :contentReference[oaicite:2]{index=2}
             }
-            if(elements_size<3){
+
+            point inter_p;
+            if (intersection_check(vec[i], vec[i_next],
+                vec[j], vec[j_next],
+                inter_p)) {
+                // Remove the earlier edge's end-vertex and insert the intersection
+                // Note: remove at i_next to maintain correct indexing :contentReference[oaicite:3]{index=3}
+                remove(i_next);
+                vec[i_next] = inter_p;
+                is_fixed = TRUE;
+
+            }
+            if (elements_size < 3) {
                 return 0;
             }
         }
     }
-    return is_fixed ; 
+    return is_fixed;
+}
+
+BOOL model::set_centroid(void) {
+    if(elements_size>0){
+        current_centroid =  centroid() ; 
+        return 1; 
+    }
+    return 0 ; 
 }
