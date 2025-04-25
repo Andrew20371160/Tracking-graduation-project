@@ -1,17 +1,45 @@
+
 #ifndef _model_h_
 #define _model_h_
-//includes
+
 #include <windows.h>
 #include <math.h>
 #include <cmath>
 #include <iostream>
 #include <cuda_runtime.h>
+#define ROWS 720
 
-//#include <cuda_runtime.h>
+#define COLS 1280
 #define M_PI 3.14159
-enum 
+//threshold for differenece between angles
+const FLOAT degree_threshold = 0.5;
+
+//threshold for small forces
+//used in insertion
+const FLOAT force_threshold = 3;
+
+//threshold for error in pixels count
+const INT32 limit = 12;
+//threshold for differenece between 2 angles,2 slopes ....etc
+const FLOAT threshold = 0.087f*2;
+
+const FLOAT zero_threshold = 0.001; 
+//threshold for small forces
+//used in insertion
+
+//forces vector size
+const INT32 max_forces_size = 60;
+const INT32 max_model_size = 30;
+//threshold for small lengths
+const FLOAT length_threshold = 10;
+
+enum regions
 {
-    UNSTABLE =0 ,STABLE = 1,DEFORM ,INSERT ,REINIT
+    A = 2, B = 4, C = 6, D = 8
+};
+
+enum {
+    DEFORM = 0, INSERT = 1, UNSTABLE = 2, STABLE = 3,REINIT 
 };
 class point {
 
@@ -37,6 +65,16 @@ public:
         }
         return *this;
     }
+    __host__ __device__ point operator+(const point& src_pt) const{
+        return point(x + src_pt.x, y + src_pt.y);
+    }
+    __host__ __device__ point operator-(const point& src_pt) const{
+        return point(x - src_pt.x, y - src_pt.y);
+    }
+    __host__ __device__ INT32 dot(const point& src_pt)const {
+        return x * src_pt.x + y * src_pt.y;
+    }
+
 
     // Equality operator
     __host__ __device__ BOOL operator==(const point src_pt) const {
@@ -61,9 +99,9 @@ public:
         return ((x - src_pt.x) * (x - src_pt.x) + (y - src_pt.y) * (y - src_pt.y));
     }
 }; 
+BOOL line_eq(const point& p1, const point& p2, FLOAT& a, FLOAT& b);
 
-BOOL line_eq(const point& p1,const point&p2,FLOAT &a,FLOAT&b);
-
+//swaps 2 points
 
 class model {
 
@@ -77,6 +115,8 @@ private:
     //an array that will be filled with forces each time a calculation is made
     FLOAT* force_vec;
     FLOAT* temp_vec ;
+    //stores current centroid value 
+    point current_centroid; 
 public:
     /*
     constructors and desructors
@@ -104,8 +144,6 @@ public:
     point& operator[](const UINT32)const;
     //variable accessor
     point& operator[](const UINT32);
-    //reinitializes the model where pt is the center
-    void reinit(const point&pt);
     void sort(void);
     /*
     nagi's paper mathematics
@@ -120,6 +158,8 @@ public:
 
     //performs deletion algorithm in the paper (too much vertecies)
     BOOL remove_extra_vertices(void);
+    BOOL fix_intersection(void);
+    BOOL   intersection_check(const point&p0,const point&p1, const point&p2 ,const point&p3,point&inter_p) const;
 
     //removes vertex between 2 lines that when difference between anlges of these lines is minimum
     BOOL remove_verticies_in_middle(void);
@@ -131,9 +171,10 @@ public:
     point centroid_average(void)const;
     FLOAT area(void)const;
     INT32  get_state(INT32*hist) ;
-    BOOL fix_intersection(void);
 
-    BOOL intersection_check(const point&p0,const point&p1, const point&p2 ,const point&p3,point&intersection_point) const;
-
+    //reinitializes the model where pt is the center
+    void reinit(const point pt);
+    BOOL set_centroid(void) ;
 };
+
 #endif
