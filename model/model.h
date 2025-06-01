@@ -12,16 +12,14 @@
 #define COLS 1280
 #define M_PI 3.14159
 //threshold for differenece between angles
-const FLOAT degree_threshold = 0.5;
+const FLOAT degree_threshold = 0.1;
 
 //threshold for small forces
 //used in insertion
 const FLOAT force_threshold = 3;
 
 //threshold for error in pixels count
-const INT32 limit = 12;
-//threshold for differenece between 2 angles,2 slopes ....etc
-const FLOAT threshold = 0.087f*2;
+const INT32 limit = 150;
 
 const FLOAT zero_threshold = 0.001; 
 //threshold for small forces
@@ -31,7 +29,7 @@ const FLOAT zero_threshold = 0.001;
 const INT32 max_forces_size = 60;
 const INT32 max_model_size = 30;
 //threshold for small lengths
-const FLOAT length_threshold = 10;
+const FLOAT length_threshold = 20;
 
 enum regions
 {
@@ -117,6 +115,7 @@ private:
     FLOAT* temp_vec ;
     //stores current centroid value 
     point current_centroid; 
+    INT32* hist_ptr;
 public:
     /*
     constructors and desructors
