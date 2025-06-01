@@ -165,12 +165,14 @@ BOOL model::forces(INT32* hist){
         for(UINT32 i =0 ; i <elements_size;i++){
             FLOAT lambda = vec[i].length(vec[(i+1)%elements_size])*2 ;
             force_vec[2 * i] = static_cast<FLOAT>(hist[8 * i + A + 1] - hist[8 * i + D + 0]) / lambda;
-            if (((float)hist[8 * i + A + 1] / (float)(hist[8 * i + A + 1] + hist[8 * i + A + 0]) > 0.85)
+            /*if (((float)hist[8 * i + A + 1] / (float)(hist[8 * i + A + 1] + hist[8 * i + A + 0]) > 0.85)
                 || ((float)hist[8 * i + D + 0] / (float)(hist[8 * i + D + 0] + hist[8 * i + D + 1]) > 0.85)) force_vec[2 * i] *= 6;
-
+                */
             force_vec[2 * i + 1] = static_cast<FLOAT>(hist[8 * i + B + 1] - hist[8 * i + C + 0]) / lambda;
+            /*
             if (((float)hist[8 * i + B + 1] / (float)(hist[8 * i + B + 1] + hist[8 * i + B + 0]) > 0.85)
                 || ((float)hist[8 * i + C + 0] / (float)(hist[8 * i + C + 0] + hist[8 * i + C + 1]) > 0.85)) force_vec[2 * i + 1] *= 6;
+            */
         }
         return 1;
     }
@@ -221,8 +223,8 @@ void model::insert_vertecies_at_position(INT32* hist){
             if((fabs(force_vec[i])<=force_threshold)&&
                (fabs(force_vec[i+1])<=force_threshold)){
                 //if a region intersecion with error is more than limit insert and skip added vertex
-                if ((hist[8 * i + A + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + B + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) ||
-                    (hist[8 * i + C + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + D + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2))) {
+                if ((hist[8 * i + A + 1] > limit)  || (hist[8 * i + B + 1] > limit ) ||
+                    (hist[8 * i + C + 0] > limit ) || (hist[8 * i + D + 0] > limit )) {
                     insert(vec[i].mid_point(vec[(i+1)%elements_size]),(i+1));
                     i++;
                 }
@@ -237,10 +239,10 @@ void model::insert_vertecies_at_position(INT32* hist){
             if (prev_index < 0) {
                 prev_index += elements_size;
             }
-            FLOAT prev_theta = vec[prev_index].normal_theta(vec[i]);
-            FLOAT current_theta = vec[i].normal_theta(vec[(i + 1) % elements_size]);
+            FLOAT prev_theta = vec[i].theta(vec[prev_index]);
+            FLOAT current_theta = vec[i].theta(vec[(i + 1) % elements_size]);
             //first make sure they aren't straight lines since the noisy point forms straight line with normal vertex
-            if (fabs(M_PI - fabs(prev_theta - current_theta)) <= threshold) {
+            if (fabs(prev_theta - current_theta)<= degree_threshold) {
                 remove(i);
                 i--;
             }
@@ -273,19 +275,21 @@ void model::insert_vertecies_at_position(INT32* hist){
             if (prev_index < 0) {
                 prev_index += elements_size;
             }
-            FLOAT prev_theta = vec[prev_index].normal_theta(vec[i]);
-            FLOAT current_theta = vec[i].normal_theta(vec[(i + 1) % elements_size]);
-            if (fabs(prev_theta - current_theta) <= threshold) {
+            FLOAT prev_theta = vec[prev_index].theta(vec[i]);
+            FLOAT current_theta = vec[i].theta(vec[(i + 1) % elements_size]);
+
+            if (fabs(prev_theta - current_theta) <= degree_threshold) {
+                
                 remove(i);
                 i--;
             }
         }
-        return TRUE;
+            return TRUE;
     }
 
    //returns state of the mask
     INT32 model::get_state(INT32*hist){
-        
+        hist_ptr = hist; 
         if(area()>=100){
             
             //get current centroid 
@@ -304,8 +308,8 @@ void model::insert_vertecies_at_position(INT32* hist){
 
             //if error regions are bigger than limit then we need insert
             for(UINT32 i = 0 ; i<elements_size;i++){
-                if ((hist[8 * i + A + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + B + 1] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) ||
-                    (hist[8 * i + C + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2)) || (hist[8 * i + D + 0] > (limit * vec[i].length(vec[(i + 1) % elements_size]) / 2))) {
+                if ((hist[8 * i + A + 1] > limit ) || (hist[8 * i + B + 1] > limit ) ||
+                    (hist[8 * i + C + 0] > limit )|| (hist[8 * i + D + 0] > limit )) {
                     return INSERT ;
                 }
             }
@@ -392,6 +396,7 @@ BOOL line_eq(const point& p1,const point&p2,FLOAT &a,FLOAT&b){
     return 0 ; 
 }
 void print_point(const point&p ){
+   
     cout<<"\n("<<p.x<<","<<p.y<<") " ; 
 }
 BOOL model::intersection_check(const point& p0, const point& p1, const point& p2, const point& p3, point& inter_p) const {
